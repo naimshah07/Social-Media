@@ -1,0 +1,19 @@
+{
+  "name": "pingup",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "dev": "concurrently \"cd server && npm run server\" \"cd client && npm run dev\"",
+    "dev:client": "cd client && npm run dev",
+    "dev:server": "cd server && npm run server",
+    "build": "cd client && npm run build",
+    "start": "cd server && npm run server"
+  },
+  "dependencies": {
+    "moment": "^2.30.1",
+    "react-hot-toast": "^2.6.0"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
