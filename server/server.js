@@ -16,46 +16,52 @@ import storyRoutes from "./routes/storyRoutes.js";
 import uploadRoutes from "./routes/uploadRoutes.js";
 import connectionRoutes from "./routes/connectionRoutes.js";
 
-const app = express();
+export const createApp = () => {
+  const app = express();
 
-// Middleware
-app.use(express.json());
-app.use(cors());
-app.use(express.urlencoded({ extended: true }));
+  // Middleware
+  app.use(express.json());
+  app.use(cors());
+  app.use(express.urlencoded({ extended: true }));
 
-// Connect to database (with retry guard for Vercel cold starts)
-let dbConnected = false;
-const ensureDB = async (req, res, next) => {
-  if (!dbConnected) {
-    try {
-      await connectDB();
-      dbConnected = true;
-    } catch (err) {
-      console.error('DB connect error:', err);
-      return res.status(500).json({ success: false, message: 'Database error' });
+  // Connect to database (with retry guard for Vercel cold starts)
+  let dbConnected = false;
+  const ensureDB = async (req, res, next) => {
+    if (!dbConnected) {
+      try {
+        await connectDB();
+        dbConnected = true;
+      } catch (err) {
+        console.error('DB connect error:', err);
+        return res.status(500).json({ success: false, message: 'Database error' });
+      }
     }
-  }
-  next();
+    next();
+  };
+
+  app.get("/", (req, res) => res.send("PingUp API Server is running"));
+  app.use("/api/inngest", ensureDB, serve({ client: inngest, functions }));
+  app.use("/api/users", ensureDB, userRoutes);
+  app.use("/api/posts", ensureDB, postRoutes);
+  app.use("/api/messages", ensureDB, messageRoutes);
+  app.use("/api/stories", ensureDB, storyRoutes);
+  app.use("/api/upload", ensureDB, uploadRoutes);
+  app.use("/api/connections", ensureDB, connectionRoutes);
+  app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+  // Error handling middleware
+  app.use((err, req, res, next) => {
+      console.error('Error:', err);
+      res.status(err.status || 500).json({
+          success: false,
+          message: err.message || 'Internal server error'
+      });
+  });
+
+  return app;
 };
 
-app.get("/", (req, res) => res.send("PingUp API Server is running"));
-app.use("/api/inngest", ensureDB, serve({ client: inngest, functions }));
-app.use("/api/users", ensureDB, userRoutes);
-app.use("/api/posts", ensureDB, postRoutes);
-app.use("/api/messages", ensureDB, messageRoutes);
-app.use("/api/stories", ensureDB, storyRoutes);
-app.use("/api/upload", ensureDB, uploadRoutes);
-app.use("/api/connections", ensureDB, connectionRoutes);
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-// Error handling middleware
-app.use((err, req, res, next) => {
-    console.error('Error:', err);
-    res.status(err.status || 500).json({
-        success: false,
-        message: err.message || 'Internal server error'
-    });
-});
+const app = createApp();
 
 const PORT = process.env.PORT || 4000;
 
@@ -64,7 +70,6 @@ const isVercel = process.env.VERCEL === '1' || !!process.env.AWS_LAMBDA_FUNCTION
 
 if (!isVercel) {
   await connectDB();
-  dbConnected = true;
   app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
 }
 
