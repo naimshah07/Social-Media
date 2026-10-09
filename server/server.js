@@ -8,7 +8,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 import connectDB from "./configs/db.js";
 import { serve } from "inngest/express";
-import { Inngest } from "inngest";
 import { functions, inngest } from "./inngest/index.js";
 import userRoutes from "./routes/userRoutes.js";
 import postRoutes from "./routes/postRoutes.js";
@@ -24,19 +23,30 @@ app.use(express.json());
 app.use(cors());
 app.use(express.urlencoded({ extended: true }));
 
-// Connect to database
-await connectDB();
+// Connect to database (with retry guard for Vercel cold starts)
+let dbConnected = false;
+const ensureDB = async (req, res, next) => {
+  if (!dbConnected) {
+    try {
+      await connectDB();
+      dbConnected = true;
+    } catch (err) {
+      console.error('DB connect error:', err);
+      return res.status(500).json({ success: false, message: 'Database error' });
+    }
+  }
+  next();
+};
 
 app.get("/", (req, res) => res.send("PingUp API Server is running"));
-app.use("/api/inngest", serve({ client: inngest, functions }));
-app.use("/api/users", userRoutes);
-app.use("/api/posts", postRoutes);
-app.use("/api/messages", messageRoutes);
-app.use("/api/stories", storyRoutes);
-app.use("/api/upload", uploadRoutes);
-app.use("/api/connections", connectionRoutes);
+app.use("/api/inngest", ensureDB, serve({ client: inngest, functions }));
+app.use("/api/users", ensureDB, userRoutes);
+app.use("/api/posts", ensureDB, postRoutes);
+app.use("/api/messages", ensureDB, messageRoutes);
+app.use("/api/stories", ensureDB, storyRoutes);
+app.use("/api/upload", ensureDB, uploadRoutes);
+app.use("/api/connections", ensureDB, connectionRoutes);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-app.use(express.static(path.join(__dirname, '../client/dist')));
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -47,9 +57,15 @@ app.use((err, req, res, next) => {
     });
 });
 
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../client/dist/index.html'));
-});
 const PORT = process.env.PORT || 4000;
 
-app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
+// Local dev: listen directly. Vercel serverless: export handler.
+const isVercel = process.env.VERCEL === '1' || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
+
+if (!isVercel) {
+  await connectDB();
+  dbConnected = true;
+  app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
+}
+
+export default app;
