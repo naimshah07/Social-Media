@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "server": "nodemon server.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "build": "echo \"Server build complete\""
   },
   "keywords": [],
   "author": "",
